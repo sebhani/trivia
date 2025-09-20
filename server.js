@@ -132,6 +132,7 @@ function revealAnswer() {
 }
 
 function endGame() {
+  gameState.currentQuestionIndex = -1;
   gameState.isActive = false;
 }
 

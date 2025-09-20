@@ -63,8 +63,7 @@ function updateUI(gameState) {
     gameEndEl.style.display = 'none';
     
     if (gameState.gameEnded) {
-        // Game has ended - clear localStorage
-        clearGameAnswers();
+        // Game has ended - show final score but keep localStorage for now
         statusEl.style.display = 'none';
         gameEndEl.style.display = 'block';
         document.getElementById('final-score').innerHTML = `
@@ -72,9 +71,13 @@ function updateUI(gameState) {
             <p>Thanks for playing!</p>
         `;
     } else if (!gameState.isActive) {
-        // Game not active - clear localStorage
+        // Game not active - clear localStorage and show waiting message
         clearGameAnswers();
-        showStatus('⏳ Waiting for game to start...');
+        if (gameState.totalQuestions === 0) {
+            showStatus('🎮 No trivia game available yet.<br><small>Ask the moderator to set up questions and start the game.</small>');
+        } else {
+            showStatus('⏳ Waiting for game to start...');
+        }
     } else if (!gameState.currentQuestion) {
         // Game active but no current question
         showStatus('🎮 Game is active. Waiting for first question...');
