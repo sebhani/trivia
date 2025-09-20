@@ -1,24 +1,14 @@
 // Player management
 let playerId = localStorage.getItem('triviaPlayerId');
+let playerScore = parseInt(localStorage.getItem('triviaPlayerScore')) || 0;
 let currentGameState = null;
 
-// Initialize player
-async function initializePlayer() {
+// Generate player ID if not exists
+function initializePlayer() {
     if (!playerId) {
-        try {
-            const response = await fetch('/api/join', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            const data = await response.json();
-            playerId = data.playerId;
-            localStorage.setItem('triviaPlayerId', playerId);
-            console.log('New player created:', playerId);
-        } catch (error) {
-            console.error('Failed to join game:', error);
-            showStatus('❌ Failed to connect to game');
-            return;
-        }
+        playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('triviaPlayerId', playerId);
+        console.log('New player created:', playerId);
     }
     
     // Start polling for game state
@@ -39,14 +29,40 @@ async function updateGameState() {
         currentGameState = gameState;
         updateUI(gameState);
         
-        // Clear any connection error messages
-        if (document.getElementById('game-status').textContent.includes('Connection lost')) {
-            // Connection restored, update UI normally
-        }
+        // Report player stats to server for moderator dashboard
+        reportPlayerStats();
+        
     } catch (error) {
         console.error('Failed to fetch game state:', error);
         showStatus('❌ Connection lost. Retrying...');
-        // Continue polling even on error
+    }
+}
+
+// Report player stats to server for moderator tracking
+async function reportPlayerStats() {
+    if (!currentGameState || !currentGameState.isActive) return;
+    
+    try {
+        // Get current question answer stats from localStorage
+        const answerStats = {};
+        if (currentGameState.currentQuestion) {
+            const storedAnswer = getStoredAnswer(currentGameState.currentQuestion.id);
+            if (storedAnswer && !currentGameState.answerRevealed) {
+                answerStats[storedAnswer] = 1;
+            }
+        }
+        
+        await fetch('/api/report-stats', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                playerId: playerId,
+                answerStats: answerStats
+            })
+        });
+    } catch (error) {
+        // Silently fail - this is just for moderator stats
+        console.log('Failed to report stats:', error);
     }
 }
 
@@ -63,16 +79,19 @@ function updateUI(gameState) {
     gameEndEl.style.display = 'none';
     
     if (gameState.gameEnded) {
-        // Game has ended - show final score but keep localStorage for now
+        // Game has ended - show final score
         statusEl.style.display = 'none';
         gameEndEl.style.display = 'block';
         document.getElementById('final-score').innerHTML = `
-            <p>Your final score: <strong>${gameState.playerScore}/${gameState.totalQuestions}</strong></p>
+            <p>Your final score: <strong>${playerScore}/${gameState.totalQuestions}</strong></p>
             <p>Thanks for playing!</p>
         `;
     } else if (!gameState.isActive) {
         // Game not active - clear localStorage and show waiting message
         clearGameAnswers();
+        playerScore = 0;
+        localStorage.setItem('triviaPlayerScore', '0');
+        
         if (gameState.totalQuestions === 0) {
             showStatus('🎮 No trivia game available yet.<br><small>Ask the moderator to set up questions and start the game.</small>');
         } else {
@@ -86,15 +105,13 @@ function updateUI(gameState) {
         statusEl.style.display = 'none';
         
         if (gameState.answerRevealed) {
+            // Update score when answer is revealed
+            updatePlayerScore();
             // Show results
             showResults(gameState);
         } else {
             // Show question
-            if (gameState.answerRevealed) {
-                showResults(gameState);
-            } else {
-                showQuestion(gameState.currentQuestion, gameState);
-            }
+            showQuestion(gameState.currentQuestion, gameState);
         }
     }
 }
@@ -116,12 +133,32 @@ function storeAnswer(questionId, answer) {
 }
 
 function clearGameAnswers() {
-    // Remove all trivia answer keys
+    // Remove all trivia answer and scored question keys
     Object.keys(localStorage).forEach(key => {
-        if (key.startsWith('trivia_answer_')) {
+        if (key.startsWith('trivia_answer_') || key.startsWith('trivia_scored_')) {
             localStorage.removeItem(key);
         }
     });
+}
+
+function updatePlayerScore() {
+    if (!currentGameState || !currentGameState.currentQuestion) return;
+    
+    const questionId = currentGameState.currentQuestion.id;
+    const scoredKey = `trivia_scored_${questionId}`;
+    
+    // Check if we already scored this question
+    if (localStorage.getItem(scoredKey)) return;
+    
+    const storedAnswer = getStoredAnswer(questionId);
+    if (storedAnswer && currentGameState.answerRevealed && currentGameState.correctAnswer) {
+        if (storedAnswer === currentGameState.correctAnswer) {
+            playerScore++;
+            localStorage.setItem('triviaPlayerScore', playerScore.toString());
+        }
+        // Mark this question as scored
+        localStorage.setItem(scoredKey, 'true');
+    }
 }
 
 // Show current question
@@ -143,11 +180,12 @@ function showQuestion(question, gameState) {
         const btn = document.getElementById(`option-${option}`);
         btn.textContent = `${option}. ${question.options[option]}`;
         
-        // Reset button state
+        // Reset button state - clear all classes
         btn.className = 'option-btn';
+        btn.classList.remove('selected', 'correct', 'incorrect');
         btn.disabled = false;
         
-        // Show stored selection
+        // Show stored selection for current question only
         if (storedAnswer === option) {
             btn.classList.add('selected');
         }
@@ -156,20 +194,15 @@ function showQuestion(question, gameState) {
     });
     
     // Disable buttons if already answered
-    if (storedAnswer || (gameState && gameState.playerAnswered)) {
+    if (storedAnswer) {
         ['A', 'B', 'C', 'D'].forEach(option => {
             document.getElementById(`option-${option}`).disabled = true;
         });
-        
-        if (!storedAnswer && gameState.playerAnswered) {
-            questionEl.innerHTML += 
-                '<p style="text-align: center; color: #27ae60; margin-top: 15px;">✓ You have already answered this question</p>';
-        }
     }
 }
 
 // Handle answer selection
-async function selectAnswer(answer, questionId) {
+function selectAnswer(answer, questionId) {
     const storedAnswer = getStoredAnswer(questionId);
     
     // Clear previous selection
@@ -179,33 +212,16 @@ async function selectAnswer(answer, questionId) {
     
     if (storedAnswer) return; // Already submitted
     
-    // Update UI
+    // Update UI and store locally
     document.getElementById(`option-${answer}`).classList.add('selected');
+    storeAnswer(questionId, answer);
     
-    // Submit to server
-    try {
-        const response = await fetch('/api/answer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ playerId, answer })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            storeAnswer(questionId, answer);
-            showUserMessage(data.message || 'Answer submitted successfully!', 'success');
-            ['A', 'B', 'C', 'D'].forEach(option => {
-                document.getElementById(`option-${option}`).disabled = true;
-            });
-        } else {
-            document.getElementById(`option-${answer}`).classList.remove('selected');
-            showUserMessage(data.error || 'Failed to submit answer', 'error');
-        }
-    } catch (error) {
-        document.getElementById(`option-${answer}`).classList.remove('selected');
-        showUserMessage('Network error. Please try again.', 'error');
-    }
+    // Disable all buttons after selection
+    ['A', 'B', 'C', 'D'].forEach(option => {
+        document.getElementById(`option-${option}`).disabled = true;
+    });
+    
+    showUserMessage('Answer saved!', 'success');
 }
 
 function showUserMessage(message, type) {
@@ -260,24 +276,9 @@ function showResults(gameState) {
         }
     });
     
-    // Show answer statistics
-    const statsEl = document.getElementById('answer-stats');
-    statsEl.innerHTML = '<h4>Answer Distribution:</h4>';
-    
-    ['A', 'B', 'C', 'D'].forEach(option => {
-        const count = gameState.answerStats[option] || 0;
-        const isCorrect = option === gameState.correctAnswer;
-        statsEl.innerHTML += `
-            <div class="stat-bar">
-                <span>${option}. ${currentGameState.currentQuestion.options[option]} ${isCorrect ? '✓' : ''}</span>
-                <span class="stat-count">${count} players</span>
-            </div>
-        `;
-    });
-    
     // Show player score
     document.getElementById('player-score').innerHTML = `
-        Your score: ${gameState.playerScore}/${gameState.totalQuestions}
+        Your score: ${playerScore}/${gameState.totalQuestions}
     `;
 }
 

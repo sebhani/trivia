@@ -30,8 +30,8 @@ let gameState = {
   isActive: false,
   currentQuestionIndex: -1,
   questions: [],
-  players: new Map(), // playerId -> {score, answers}
   answerRevealed: false,
+  playerCount: 0,
   answerStats: {A: 0, B: 0, C: 0, D: 0}
 };
 
@@ -47,46 +47,6 @@ function addQuestion(text, options, correctAnswer) {
   return question;
 }
 
-function addPlayer() {
-  const playerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  gameState.players.set(playerId, {
-    score: 0,
-    answers: new Map()
-  });
-  return playerId;
-}
-
-function submitAnswer(playerId, answer) {
-  if (!gameState.isActive || gameState.answerRevealed) {
-    return false; // Game not active or answer already revealed
-  }
-  
-  const currentQuestion = getCurrentQuestion();
-  if (!currentQuestion) {
-    return false;
-  }
-  
-  const player = gameState.players.get(playerId);
-  if (!player) {
-    return false;
-  }
-  
-  // Check if player already answered this question
-  if (player.answers.has(currentQuestion.id)) {
-    return false; // Already answered this question
-  }
-  
-  // Store answer
-  player.answers.set(currentQuestion.id, answer);
-  
-  // Update answer statistics
-  if (['A', 'B', 'C', 'D'].includes(answer)) {
-    gameState.answerStats[answer]++;
-  }
-  
-  return true;
-}
-
 function getCurrentQuestion() {
   if (gameState.currentQuestionIndex >= 0 && gameState.currentQuestionIndex < gameState.questions.length) {
     return gameState.questions[gameState.currentQuestionIndex];
@@ -99,11 +59,7 @@ function startGame() {
   gameState.currentQuestionIndex = -1;
   gameState.answerRevealed = false;
   resetAnswerStats();
-  // Clear all player scores
-  gameState.players.forEach(player => {
-    player.score = 0;
-    player.answers.clear();
-  });
+  gameState.playerCount = 0;
 }
 
 function nextQuestion() {
@@ -113,49 +69,22 @@ function nextQuestion() {
     resetAnswerStats();
     return true;
   }
-  return false; // No more questions
+  return false;
 }
 
 function revealAnswer() {
   gameState.answerRevealed = true;
-  
-  // Calculate scores for all players
-  const currentQuestion = getCurrentQuestion();
-  if (currentQuestion) {
-    gameState.players.forEach(player => {
-      const playerAnswer = player.answers.get(currentQuestion.id);
-      if (playerAnswer === currentQuestion.correctAnswer) {
-        player.score++;
-      }
-    });
-  }
 }
 
 function endGame() {
   gameState.currentQuestionIndex = -1;
   gameState.isActive = false;
+  gameState.playerCount = 0;
 }
 
 function isGameComplete() {
   return gameState.answerRevealed && 
          gameState.currentQuestionIndex >= gameState.questions.length - 1;
-}
-
-function getPlayerStats() {
-  const stats = [];
-  gameState.players.forEach((player, playerId) => {
-    stats.push({
-      playerId,
-      score: player.score,
-      totalQuestions: gameState.questions.length,
-      percentage: gameState.questions.length > 0 ? 
-        Math.round((player.score / gameState.questions.length) * 100) : 0
-    });
-  });
-  
-  // Sort by score (highest first)
-  stats.sort((a, b) => b.score - a.score);
-  return stats;
 }
 
 function deleteQuestion(questionId) {
@@ -181,12 +110,6 @@ function testGameState() {
   
   console.log('✓ Added questions:', gameState.questions.length);
   
-  // Test adding players
-  const player1 = addPlayer();
-  const player2 = addPlayer();
-  
-  console.log('✓ Added players:', gameState.players.size);
-  
   // Test game flow
   startGame();
   console.log('✓ Game started:', gameState.isActive);
@@ -194,13 +117,8 @@ function testGameState() {
   nextQuestion();
   console.log('✓ Advanced to question 1:', gameState.currentQuestionIndex);
   
-  // Test submitting answers
-  submitAnswer(player1, 'B');
-  submitAnswer(player2, 'A');
-  console.log('✓ Answers submitted:', gameState.answerStats);
-  
   revealAnswer();
-  console.log('✓ Answer revealed, scores:', Array.from(gameState.players.values()).map(p => p.score));
+  console.log('✓ Answer revealed');
   
   console.log('Game state management tests completed successfully!');
 }
@@ -215,17 +133,10 @@ app.get('/api/game-state', (req, res) => {
   const currentQuestion = getCurrentQuestion();
   const playerId = req.query.playerId;
   
-  let playerScore = 0;
-  let playerAnswered = false;
-  
-  if (playerId && gameState.players.has(playerId)) {
-    const player = gameState.players.get(playerId);
-    playerScore = player.score;
-    
-    // Check if player answered current question
-    if (currentQuestion) {
-      playerAnswered = player.answers.has(currentQuestion.id);
-    }
+  // Update player count estimation
+  if (playerId) {
+    // Simple estimation - could be improved with more sophisticated tracking
+    gameState.playerCount = Math.max(gameState.playerCount, 1);
   }
   
   res.json({
@@ -238,80 +149,36 @@ app.get('/api/game-state', (req, res) => {
     answerRevealed: gameState.answerRevealed,
     answerStats: gameState.answerRevealed ? gameState.answerStats : null,
     correctAnswer: gameState.answerRevealed && currentQuestion ? currentQuestion.correctAnswer : null,
-    playerScore: playerScore,
     totalQuestions: gameState.questions.length,
     currentQuestionNumber: gameState.currentQuestionIndex + 1,
-    playerAnswered: playerAnswered,
     gameComplete: isGameComplete(),
     gameEnded: !gameState.isActive && gameState.currentQuestionIndex >= 0
   });
 });
 
-app.post('/api/join', (req, res) => {
-  const playerId = addPlayer();
-  res.json({ playerId });
+// Report player stats for moderator dashboard
+app.post('/api/report-stats', (req, res) => {
+  const { playerId, answerStats } = req.body;
+  
+  if (!playerId || !answerStats) {
+    return res.status(400).json({ error: 'Player ID and answer stats required' });
+  }
+  
+  // Update player count
+  gameState.playerCount = Math.max(gameState.playerCount, 1);
+  
+  // Update answer statistics if game is active and answer not revealed
+  if (gameState.isActive && !gameState.answerRevealed && answerStats) {
+    Object.keys(answerStats).forEach(option => {
+      if (['A', 'B', 'C', 'D'].includes(option)) {
+        gameState.answerStats[option] = (gameState.answerStats[option] || 0) + (answerStats[option] || 0);
+      }
+    });
+  }
+  
+  res.json({ success: true });
 });
 
-app.post('/api/answer', rateLimitAnswers, validatePlayerId, (req, res) => {
-  const { answer } = req.body;
-  const playerId = req.playerId;
-  
-  if (!answer || typeof answer !== 'string') {
-    return res.status(400).json({ error: 'Answer is required' });
-  }
-  
-  if (!['A', 'B', 'C', 'D'].includes(answer.toUpperCase())) {
-    return res.status(400).json({ error: 'Invalid answer. Must be A, B, C, or D' });
-  }
-  
-  if (!gameState.isActive) {
-    return res.status(409).json({ 
-      error: 'Game is not active',
-      hint: 'Please wait for the moderator to start the game'
-    });
-  }
-  
-  if (gameState.answerRevealed) {
-    return res.status(409).json({ 
-      error: 'Answer already revealed for this question',
-      hint: 'Please wait for the next question'
-    });
-  }
-  
-  const currentQuestion = getCurrentQuestion();
-  if (!currentQuestion) {
-    return res.status(409).json({ 
-      error: 'No active question',
-      hint: 'Please wait for the moderator to advance to the next question'
-    });
-  }
-  
-  const player = gameState.players.get(playerId);
-  if (player.answers.has(currentQuestion.id)) {
-    return res.status(409).json({ 
-      error: 'You have already answered this question',
-      hint: 'Please wait for the answer to be revealed'
-    });
-  }
-  
-  const success = submitAnswer(playerId, answer.toUpperCase());
-  
-  if (!success) {
-    return res.status(500).json({ 
-      error: 'Failed to submit answer. Please try again.',
-      hint: 'If the problem persists, please refresh the page'
-    });
-  }
-  
-  res.json({ 
-    success: true, 
-    message: 'Answer submitted successfully',
-    questionId: currentQuestion.id,
-    answer: answer.toUpperCase(),
-    questionNumber: gameState.currentQuestionIndex + 1,
-    totalQuestions: gameState.questions.length
-  });
-});
 
 // Validation middleware
 function validateQuestionInput(req, res, next) {
@@ -343,57 +210,7 @@ function validateQuestionInput(req, res, next) {
   next();
 }
 
-function validatePlayerId(req, res, next) {
-  const playerId = req.body.playerId || req.query.playerId;
-  
-  if (!playerId || typeof playerId !== 'string') {
-    return res.status(400).json({ error: 'Valid player ID is required' });
-  }
-  
-  // For availability: Auto-rejoin if player not found
-  if (!gameState.players.has(playerId)) {
-    const player = { score: 0, answers: new Map() };
-    gameState.players.set(playerId, player);
-  }
-  
-  req.playerId = playerId;
-  next();
-}
 
-// Rate limiting for answer submissions
-const answerAttempts = new Map(); // playerId -> { count, lastAttempt }
-
-function rateLimitAnswers(req, res, next) {
-  const playerId = req.body.playerId;
-  const now = Date.now();
-  const windowMs = 5000; // 5 second window
-  const maxAttempts = 3; // Max 3 attempts per 5 seconds
-  
-  if (!answerAttempts.has(playerId)) {
-    answerAttempts.set(playerId, { count: 1, lastAttempt: now });
-    return next();
-  }
-  
-  const attempts = answerAttempts.get(playerId);
-  
-  if (now - attempts.lastAttempt > windowMs) {
-    // Reset window
-    attempts.count = 1;
-    attempts.lastAttempt = now;
-    return next();
-  }
-  
-  if (attempts.count >= maxAttempts) {
-    return res.status(429).json({ 
-      error: 'Too many answer attempts. Please wait a moment before trying again.',
-      retryAfter: Math.ceil((windowMs - (now - attempts.lastAttempt)) / 1000)
-    });
-  }
-  
-  attempts.count++;
-  attempts.lastAttempt = now;
-  next();
-}
 
 // Moderator authentication middleware
 function authenticateModerator(req, res, next) {
@@ -511,7 +328,7 @@ app.post('/api/moderator/reveal-answer', (req, res) => {
     success: true, 
     correctAnswer: currentQuestion.correctAnswer,
     answerStats: gameState.answerStats,
-    playerCount: gameState.players.size,
+    playerCount: gameState.playerCount,
     totalResponses: totalResponses,
     message: `Answer revealed: ${currentQuestion.correctAnswer}. ${totalResponses} players responded.`
   });
@@ -523,13 +340,11 @@ app.post('/api/moderator/end-game', (req, res) => {
   }
   
   endGame();
-  const finalStats = getPlayerStats();
   
   res.json({ 
     success: true, 
     message: 'Game ended successfully',
-    finalStats: finalStats.slice(0, 5), // Top 5 players
-    totalPlayers: gameState.players.size
+    totalPlayers: gameState.playerCount
   });
 });
 
@@ -538,7 +353,7 @@ app.get('/api/moderator/status', (req, res) => {
   
   res.json({
     isActive: gameState.isActive,
-    playerCount: gameState.players.size,
+    playerCount: gameState.playerCount,
     totalQuestions: gameState.questions.length,
     currentQuestionIndex: gameState.currentQuestionIndex,
     currentQuestion: currentQuestion ? {
@@ -550,8 +365,7 @@ app.get('/api/moderator/status', (req, res) => {
     answerRevealed: gameState.answerRevealed,
     answerStats: gameState.answerStats,
     gameComplete: isGameComplete(),
-    playerStats: getPlayerStats(),
-    questions: gameState.questions // Add questions list for moderator
+    questions: gameState.questions
   });
 });
 
