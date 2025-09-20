@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trivia Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Trivia Game</h1>
+        
+        <div id="game-status" class="status-card">
+            <p>Loading...</p>
+        </div>
+        
+        <div id="question-container" class="question-card" style="display: none;">
+            <h2 id="question-text"></h2>
+            <div id="answer-options" class="options-grid">
+                <button class="option-btn" data-answer="A" id="option-A"></button>
+                <button class="option-btn" data-answer="B" id="option-B"></button>
+                <button class="option-btn" data-answer="C" id="option-C"></button>
+                <button class="option-btn" data-answer="D" id="option-D"></button>
+            </div>
+        </div>
+        
+        <div id="results-container" class="results-card" style="display: none;">
+            <h3>Results</h3>
+            <div id="answer-stats"></div>
+            <div id="player-score"></div>
+        </div>
+        
+        <div id="game-end" class="status-card" style="display: none;">
+            <h2>🎉 Game Complete!</h2>
+            <div id="final-score"></div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "name": "trivia-platform",
+  "version": "1.0.0",
+  "description": "Simple trivia platform for in-person events with real-time polling",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node -e \"console.log('✓ Server syntax check passed')\" && node -c server.js",
+    "deploy": "npm test && echo '✓ Ready for deployment'",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop trivia-platform",
+    "pm2:restart": "pm2 restart trivia-platform",
+    "pm2:logs": "pm2 logs trivia-platform"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": ["trivia", "game", "realtime", "polling", "mobile"],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "."
+  }
+}

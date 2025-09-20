@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trivia Moderator Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .moderator-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .login-form, .dashboard {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }
+        
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 5px;
+        }
+        
+        .btn:hover {
+            background: #2980b9;
+        }
+        
+        .btn.success {
+            background: #27ae60;
+        }
+        
+        .btn.success:hover {
+            background: #229954;
+        }
+        
+        .btn.danger {
+            background: #e74c3c;
+        }
+        
+        .btn.danger:hover {
+            background: #c0392b;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .status-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .status-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+        }
+        
+        .success {
+            color: #27ae60;
+            margin-top: 10px;
+        }
+        
+        .question-item {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .question-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+        
+        .question-text {
+            font-weight: bold;
+            color: #2c3e50;
+            flex: 1;
+            margin-right: 10px;
+        }
+        
+        .delete-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        
+        .delete-btn:hover {
+            background: #c0392b;
+        }
+        
+        .delete-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        
+        .question-options {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .correct-answer {
+            color: #27ae60;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="moderator-container">
+        <h1>🎯 Trivia Moderator Dashboard</h1>
+        
+        <!-- Login Form -->
+        <div id="login-section" class="login-form">
+            <h2>Login</h2>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn">Login</button>
+                <div id="login-error" class="error"></div>
+            </form>
+        </div>
+        
+        <!-- Dashboard -->
+        <div id="dashboard-section" class="hidden">
+            <!-- Game Status -->
+            <div class="dashboard">
+                <h2>Game Status</h2>
+                <div class="status-grid">
+                    <div class="status-card">
+                        <div class="status-value" id="player-count">0</div>
+                        <div>Players Connected</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-value" id="question-count">0</div>
+                        <div>Questions Added</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-value" id="current-question">-</div>
+                        <div>Current Question</div>
+                    </div>
+                    <div class="status-card">
+                        <div class="status-value" id="game-status">Inactive</div>
+                        <div>Game State</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Question Management -->
+            <div class="dashboard">
+                <h2>Add Question</h2>
+                <form id="question-form">
+                    <div class="form-group">
+                        <label for="question-text">Question:</label>
+                        <textarea id="question-text" rows="3" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="option-a">Option A:</label>
+                        <input type="text" id="option-a" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="option-b">Option B:</label>
+                        <input type="text" id="option-b" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="option-c">Option C:</label>
+                        <input type="text" id="option-c" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="option-d">Option D:</label>
+                        <input type="text" id="option-d" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="correct-answer">Correct Answer:</label>
+                        <select id="correct-answer" required>
+                            <option value="">Select correct answer</option>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                            <option value="C">C</option>
+                            <option value="D">D</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn">Add Question</button>
+                    <div id="question-message"></div>
+                </form>
+            </div>
+            
+            <!-- Question List -->
+            <div class="dashboard">
+                <h2>Questions List</h2>
+                <div id="questions-list">
+                    <p>No questions added yet.</p>
+                </div>
+            </div>
+            
+            <!-- Game Controls -->
+            <div class="dashboard">
+                <h2>Game Controls</h2>
+                <button id="start-game-btn" class="btn success">Start Game</button>
+                <button id="next-question-btn" class="btn" disabled>Next Question</button>
+                <button id="reveal-answer-btn" class="btn" disabled>Reveal Answer</button>
+                <button id="end-game-btn" class="btn danger" disabled>End Game</button>
+                <div id="control-message"></div>
+            </div>
+            
+            <!-- Live Statistics -->
+            <div class="dashboard">
+                <h2>Live Statistics</h2>
+                <div id="current-question-display"></div>
+                <div id="answer-statistics"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="moderator.js"></script>
+</body>
+</html>
